@@ -1,3 +1,4 @@
+import profile
 from pydoc import Doc
 from time import sleep
 import re
@@ -10,7 +11,12 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from msedge.selenium_tools import Edge, EdgeOptions
 from selenium.webdriver.support.ui import WebDriverWait
+import datetime
 
+
+
+
+TARGET_ACCOUNT = "thasbath"
 class nrIG:
     def __init__(self):
         self.TIMEOUT_DURATION  = 3
@@ -29,6 +35,33 @@ class nrIG:
 
         self.browser.get(self.IGURL)
 
+    def ScrollPopupBoxNew(self, pop_up_box, target_element_selector):
+        num_elements_found_old = -1
+        num_elements_found = 0
+
+        ActionChains(self.browser).move_to_element(pop_up_box).click().send_keys(Keys.PAGE_DOWN).perform()
+        sleep(3)
+        ActionChains(self.browser).move_to_element(pop_up_box).click().perform()
+
+
+
+
+
+
+        while num_elements_found_old != num_elements_found:
+   
+            for i in range(0,5):
+                ActionChains(self.browser).move_to_element(pop_up_box).send_keys(Keys.PAGE_DOWN).perform()
+                sleep(0.5)
+            tmp = num_elements_found
+
+            users_found = self.browser.find_elements(by=By.CSS_SELECTOR, value=target_element_selector)
+            num_elements_found = len(users_found)
+            num_elements_found_old = tmp
+
+            
+
+
     def ScrollPopupBox(self, popupBox, liCssSelector):
         numFoundOld = -1
         numFound = 0
@@ -41,61 +74,63 @@ class nrIG:
             numFoundOld = tmp
 
 
-    def PullData(self, instagramName):
+    
+    def ScrollFollowing(self, instagramName):
         self.browser.get(self.IGURL + instagramName)
+        WebDriverWait(self.browser, self.TIMEOUT_DURATION).until(EC.element_to_be_clickable((By.XPATH,'//*[@id="react-root"]/section/main/div/header/section/ul/li[3]/a'))).click()
+        followersBox =  WebDriverWait(self.browser, self.TIMEOUT_DURATION).until(EC.presence_of_element_located((By.CSS_SELECTOR,'div._1XyCr')))
+        self.ScrollPopupBoxNew(followersBox, 'div._1XyCr ul li')
+        return [element.get_attribute("href") for element in self.browser.find_elements(by=By.CSS_SELECTOR, value="a.notranslate._0imsa")]
 
-        numFollowers = int(WebDriverWait(self.browser, self.TIMEOUT_DURATION).until(EC.element_to_be_clickable((By.XPATH,'//*[@id="react-root"]/section/main/div/header/section/ul/li[2]/a/div/span'))).text)
-        numFollowing = int(WebDriverWait(self.browser, self.TIMEOUT_DURATION).until(EC.element_to_be_clickable((By.XPATH,'//*[@id="react-root"]/section/main/div/header/section/ul/li[3]/a/div/span'))).text)
-        print(numFollowers)
-        print(numFollowing)
 
-        # click followers
+    def ScrollFollowers(self, instagramName):
+        self.browser.get(self.IGURL + instagramName)
         WebDriverWait(self.browser, self.TIMEOUT_DURATION).until(EC.element_to_be_clickable((By.XPATH,'//*[@id="react-root"]/section/main/div/header/section/ul/li[2]/a'))).click()
         followersBox =  WebDriverWait(self.browser, self.TIMEOUT_DURATION).until(EC.presence_of_element_located((By.CSS_SELECTOR,'div.isgrP')))
-     
+        self.ScrollPopupBoxNew(followersBox, 'div.isgrP ul li')
+        return [element.get_attribute("href") for element in self.browser.find_elements(by=By.CSS_SELECTOR, value="a.notranslate._0imsa")]
 
-        # traverse the popup box.
-        self.ScrollPopupBox(followersBox, 'li.wo9IH')
-        found_people = self.browser.find_elements(by=By.CSS_SELECTOR, value="a.{}".format("notranslate._0imsa "))
+    def PullData(self, instagramName):
 
-        # get the links to everyones profiles 
-        found_links = []
-        for follower in found_people:
-            found_links.append(follower.get_attribute("href"))
+        self.browser.get(self.IGURL + instagramName)
+        links = self.ScrollFollowers()
+
+
+
+
+
+
         
+        # found_people_following_statuses = self.browser.find_elements(by=By.CSS_SELECTOR, value="div.{}".format("Pkbci button"))
+        # for following_status_button in found_people_following_statuses:
+        #     following_status_value = following_status_button.find_element(by=By.TAG_NAME, value="div").text.lower()
+        #     if following_status_value == "follow":
+        #         # following_status_button.click()
+        #         print("REQUESTED")
 
-        # get the following buttons for each person
-            # if we're not following them, follow them
-
-        following_statuses = self.browser.find_elements(by=By.CSS_SELECTOR, value="div.{}".format("Pkbci button"))      
-
-        for following_status_wrapper in following_statuses:
-            try:
-                # following_status_button = following_status_wrapper.find_element(by=By.CSS_SELECTOR, value="button")
-                following_status_value = following_status_wrapper.find_element(by=By.TAG_NAME, value="div").text.lower()
-                if following_status_value == "following" or following_status_value == "requested":
-                    continue
-                print("requesting follow")
-                following_status_wrapper.click()
-
-            except Exception as e:
-                print(e)
-
-
-
-
-
-            
-    def BypassAuthentification(self):
-        pass
 
 IGBot = nrIG()
 
-IGBot.PullData("thasbath")
+TARGET_ACCOUNTS = ["bathindiansoc"]
+for target_account in TARGET_ACCOUNTS:
+
+    followers = IGBot.ScrollFollowers(target_account)
+    following = IGBot.ScrollFollowing(target_account)
+
+    time_stamp = datetime.now().strftime("%d/%m/%Y")
+    file_name_followers = "{}_followers_{}.txt".format(target_account, time_stamp)
+    file_name_following = "{}_following_{}.txt".format(target_account, time_stamp)
+
+    followers = open(file_name_followers, "w")
+    followers.write(str(followers))
+    followers.close()
+
+    following = open(file_name_following, "w")
+    following.write(str(following))
+    following.close()
 
 
-while True:
-    i = 3
+
 
 
 
