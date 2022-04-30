@@ -1,3 +1,4 @@
+from multiprocessing.pool import RUN
 import profile
 from pydoc import Doc
 from time import sleep
@@ -13,6 +14,15 @@ from msedge.selenium_tools import Edge, EdgeOptions
 from selenium.webdriver.support.ui import WebDriverWait
 from datetime import datetime
 from docutil import DocUtil
+
+import atexit
+
+import threading
+
+
+
+RUNNING = True
+
 
 
 
@@ -41,7 +51,7 @@ class nrIG:
 
         self.browser.get(self.IGURL)
 
-        self.FOLLOW_BUFFER_DURATION = 60
+        self.FOLLOW_BUFFER_DURATION = 30
 
 
 
@@ -56,7 +66,7 @@ class nrIG:
         found_ig_accounts = []
 
 
-        while num_elements_found_old != num_elements_found:
+        while num_elements_found_old != num_elements_found and RUNNING:
    
             for i in range(0,5):
                 ActionChains(self.browser).move_to_element(pop_up_box).send_keys(Keys.PAGE_DOWN).perform()
@@ -74,8 +84,8 @@ class nrIG:
             
             found_ig_accounts_tmp = users_found[start_index: end_index]
 
-            found_ig_accounts_tmp = []
             for found_ig_account in found_ig_accounts_tmp:
+                if not RUNNING: break
                 try:
                     account_text = found_ig_account.text.upper().split("\n")
                     user_name = account_text[0]
@@ -182,9 +192,9 @@ class nrIG:
         self.browser.get(self.IGURL + instagramName)
         WebDriverWait(self.browser, self.TIMEOUT_DURATION).until(EC.element_to_be_clickable((By.XPATH,'//*[@id="react-root"]/section/main/div/header/section/ul/li[3]/a'))).click()
         followersBox =  WebDriverWait(self.browser, self.TIMEOUT_DURATION).until(EC.presence_of_element_located((By.CSS_SELECTOR,'div._1XyCr')))
-        self.__UnfollowUsers(followersBox, 'div.isgrP ul li', NON_FOLLOWERS)
+        # self.__UnfollowUsers(followersBox, 'div.isgrP ul li', NON_FOLLOWERS)
 
-        # self.ScrollPopupBoxNew(followersBox, 'div._1XyCr ul li')
+        self.ScrollPopupBoxNew(followersBox, 'div._1XyCr ul li')
         return [element.get_attribute("href") for element in self.browser.find_elements(by=By.CSS_SELECTOR, value="a.notranslate._0imsa")]
 
 
@@ -192,6 +202,7 @@ class nrIG:
         self.browser.get(self.IGURL + instagramName)
         WebDriverWait(self.browser, self.TIMEOUT_DURATION).until(EC.element_to_be_clickable((By.XPATH,'//*[@id="react-root"]/section/main/div/header/section/ul/li[2]/a'))).click()
         followersBox =  WebDriverWait(self.browser, self.TIMEOUT_DURATION).until(EC.presence_of_element_located((By.CSS_SELECTOR,'div.isgrP')))
+        self.ScrollPopupBoxNew(followersBox, 'div.isgrP ul li')
         # self.__UnfollowUsers(followersBox, 'div.isgrP ul li', NON_FOLLOWERS)
         return [element.get_attribute("href") for element in self.browser.find_elements(by=By.CSS_SELECTOR, value="a.notranslate._0imsa")]
 
@@ -220,19 +231,56 @@ IGBot = nrIG()
    
 
 
+
+
+def SaveChanges():
+    f = open("requests_sent.txt", "w")
+    f.write(str(REQUESTS_SENT))
+    f.close()
+
+    print("SAVED CHANGES!")
+
+
+def ListenForCommands():
+    while True:
+        command = input("ENTER COMMAND:")
+        if command.upper() == "SAVE":
+            SaveChanges()
+            print("SAVED CHANGES")
+        
+        if command.upper() == "EXIT":
+            global RUNNING
+            RUNNING = False
+            SaveChanges()
+            print("EXITING APPLICATION")
+
+
+
+
+atexit.register(SaveChanges)
+            
+
+
+
+
 def Farm():
     # DONE_ACCOUNTS = ["bathindiandancesociety","bathindiansoc", "bathtamilsoc"]
 
-    TARGET_ACCOUNTS = ["bathindiansoc"]
+
+    listener_thread = threading.Thread(target=ListenForCommands)
+    listener_thread.setDaemon(True)
+    listener_thread.start()
+
+    TARGET_ACCOUNTS = ["thesubath"]
     # TARGET_ACCOUNTS = ["bathindiandancesociety","bathindiansoc", "bathtamilsoc", "bathhindusoc", "bathmalayaleesoc", "thesubath"]
 
 
     for target_account in TARGET_ACCOUNTS:
         print("INITIATING {}".format(target_account))
         try:
-            IGBot.GetListOfThoseWhoDontFollow("bathsikhsoc")
-            i=3
-            # followers_list = IGBot.ScrollFollowers(target_account)
+            # IGBot.GetListOfThoseWhoDontFollow("thesubath")
+            # i=3
+            followers_list = IGBot.ScrollFollowers(target_account)
             # following_list = IGBot.ScrollFollowing(target_account)
 
         except Exception as e:
@@ -251,11 +299,13 @@ def Farm():
 
 
 try:
-
+    REQUESTS_SENT = eval(open("requests_sent.txt", "r").read())
     Farm()
 
 except Exception as e:
-    print(e)
+    f = open("requests_sent.txt", "w")
+    f.write(str(REQUESTS_SENT))
+    f.close()
 
 
 
