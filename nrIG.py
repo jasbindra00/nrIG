@@ -47,6 +47,10 @@ class nrIG:
 
         atexit.register(self.SaveChanges)
 
+        listener_thread = threading.Thread(target=self.ListenForCommands)
+        listener_thread.setDaemon(True)
+        listener_thread.start()
+
 
     def ScrollOnElement(self, element, sleep_duration = 0):
         ActionChains(self.browser).move_to_element(element).click().send_keys(Keys.PAGE_DOWN).perform()
@@ -136,7 +140,7 @@ class nrIG:
             print("FOUND USER {} : {}".format(user_name, following_status))
             follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="div.{}".format("Pkbci button"))
 
-            if user_link in list_of_followers and following_status == "FOLLOWING":
+            if user_link not in list_of_followers and following_status == "FOLLOWING":
                 follow_button.click()
                 try:
                     unfollow_button = [button for button in self.browser.find_elements(by=By.TAG_NAME, value='button') if button.text.lower() == "unfollow"][0]
@@ -148,6 +152,7 @@ class nrIG:
                 if follow_button.text.upper() == "FOLLOW":
                     print("UNFOLLOWED USER {}".format(user_link))
                     self.REQUESTS_SENT.append(user_name)
+                    self.SaveChanges()
                     ActionChains(self.browser).move_to_element(pop_up_box).click().perform()
                     for i in range(30):
                         print("SLEEPING {}TH SECOND".format(i))
@@ -155,7 +160,6 @@ class nrIG:
                     return
                 
                 print("LIMIT REACHED")
-
 
         except Exception as e:
             print(e)
@@ -211,9 +215,7 @@ class nrIG:
         # DONE_ACCOUNTS = ["bathindiandancesociety","bathindiansoc", "bathtamilsoc"]
 
 
-        listener_thread = threading.Thread(target=self.ListenForCommands)
-        listener_thread.setDaemon(True)
-        listener_thread.start()
+
 
         TARGET_ACCOUNTS = ["thesubath"]
         # TARGET_ACCOUNTS = ["bathindiandancesociety","bathindiansoc", "bathtamilsoc", "bathhindusoc", "bathmalayaleesoc", "thesubath"]
@@ -230,7 +232,7 @@ class nrIG:
 
 
     def UnfollowNonFollowers(self):
-        list_of_followers = self.__ScrollFollowers(self.owner_account, user_handler=None)
+        list_of_followers = eval(open("list_of_followers.txt", "r").read())
         list_of_following = self.__ScrollFollowing(self.owner_account, self.__UnfollowUser, list_of_followers = list_of_followers)
 
 
