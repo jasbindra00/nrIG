@@ -20,6 +20,7 @@ import threading
 
 class nrIG:
     def __init__(self, owner_account):
+        self.SAVE_MODE = True
         self.owner_account = owner_account
         self.RUNNING = True
         self.REQUESTS_SENT = eval(open("requests_sent.txt", "r").read())
@@ -45,15 +46,19 @@ class nrIG:
 
         self.IG_REQUEST_BUFFER_DURATION = 60
 
-        atexit.register(self.SaveChanges)
 
         listener_thread = threading.Thread(target=self.ListenForCommands)
         listener_thread.setDaemon(True)
         listener_thread.start()
 
 
-    def ScrollOnElement(self, element, sleep_duration = 0):
-        ActionChains(self.browser).move_to_element(element).click().send_keys(Keys.PAGE_DOWN).perform()
+    def ScrollOnElement(self, element, element_css_selector, sleep_duration = 0):
+        JS_injection = '''
+        var fDialog = document.querySelector('{}');
+        fDialog.scrollTop = fDialog.scrollHeight
+            '''.format(element_css_selector)
+
+        self.browser.execute_script(JS_injection)
         if sleep_duration != 0:
             sleep(sleep_duration)
 
@@ -72,15 +77,15 @@ class nrIG:
         num_elements_found_old = -1
         num_elements_found = 0
 
+        ActionChains(self.browser).move_to_element(pop_up_box).click().send_keys(Keys.PAGE_DOWN).perform()
+        self.ScrollOnElement(pop_up_box, popup_box_xpath,3)
 
-        self.ScrollOnElement(pop_up_box, 3)
-        ActionChains(self.browser).move_to_element(pop_up_box).click().perform()
         found_ig_accounts = []
 
         while num_elements_found_old != num_elements_found and self.RUNNING:
             if not self.RUNNING: break
    
-            for i in range(0,5): self.ScrollOnElement(pop_up_box, 1)
+            for i in range(0,5): self.ScrollOnElement(pop_up_box,popup_box_xpath, 1)
             tmp = num_elements_found
 
             users_found = self.browser.find_elements(by=By.CSS_SELECTOR, value=pop_up_box_element_selector)
@@ -110,8 +115,11 @@ class nrIG:
             if user_name in self.REQUESTS_SENT:
                 print("SENT FOLLOW REQUEST TO {} ALREADY!".format(user_name))
                 return
-
-            follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="div.{}".format("Pkbci button"))
+            try:
+                follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="div.{}".format("Pkbci button"))
+            except Exception as e:
+                follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="button.{}".format("sqdOP.L3NKy._8A5w5"))
+                                                                                     
             follow_button.click()
             sleep(2)
             if follow_button.text.upper() == "FOLLOW":
@@ -127,6 +135,17 @@ class nrIG:
         except Exception as e:
             print(e)
 
+    def __AccrueUser(self, found_ig_account, **kwargs):
+        list_of_followers = kwargs.get("list_of_followers")
+        account_text = found_ig_account.text.upper().split("\n")
+        user_name = account_text[0]
+        user_link = 'https://www.instagram.com/{}/'.format(user_name.lower())
+                    
+        following_status = account_text[-1]
+        print("FOUND USER {} : {}".format(user_name, following_status))
+        list_of_followers.append(user_link)
+            
+
     def __UnfollowUser(self,found_ig_account, **kwargs):
         try:
             list_of_followers = kwargs.get("list_of_followers")
@@ -138,8 +157,11 @@ class nrIG:
             
             following_status = account_text[-1]
             print("FOUND USER {} : {}".format(user_name, following_status))
-            follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="div.{}".format("Pkbci button"))
-
+            try:
+                follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="div.{}".format("Pkbci button"))
+            except Exception as e:
+                follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="button.{}".format("sqdOP.L3NKy._8A5w5"))
+                      
             if user_link not in list_of_followers and following_status == "FOLLOWING":
                 follow_button.click()
                 try:
@@ -154,7 +176,7 @@ class nrIG:
                     self.REQUESTS_SENT.append(user_name)
                     self.SaveChanges()
                     ActionChains(self.browser).move_to_element(pop_up_box).click().perform()
-                    for i in range(30):
+                    for i in range(60):
                         print("SLEEPING {}TH SECOND".format(i))
                         sleep(1)
                     return
@@ -166,11 +188,11 @@ class nrIG:
             
 
     
-
+    
+    # MERGE TWO FUNCTIONS INTO ONE (V SIMILAR)
     def __ScrollFollowing(self, instagram_name, user_handler, **kwargs):
-
         self.ScrollPopupBox(additional_arguments = kwargs, host_page = self.IGURL + instagram_name, popup_box_link_xpath='//*[@id="react-root"]/section/main/div/header/section/ul/li[3]/a', 
-        popup_box_xpath='div._1XyCr', pop_up_box_element_selector='div._1XyCr ul li', element_handler=user_handler)
+        popup_box_xpath='div.isgrP', pop_up_box_element_selector='div.isgrP ul li', element_handler=user_handler)
         return self.__GetAllUserLinks()
 
     def __ScrollFollowers(self, instagram_name, user_handler, **kwargs):
@@ -184,11 +206,16 @@ class nrIG:
 
 
     def FollowFollowers(self, target_account):
-        self.__ScrollFollowing(target_account, self.__FollowUser)
+        followers = self.__ScrollFollowers(target_account, self.__FollowUser)
     
+    def FollowFollowing(self, target_account):
+        following = self.__ScrollFollowing(target_account, self.__FollowUser)
+
 
 
     def SaveChanges(self):
+        if not self.SAVE_MODE:
+            print("FAILED TO SAVE CHANGES, SAVE MODE IS DEACTIVATED")
         f = open("requests_sent.txt", "w")
         f.write(str(self.REQUESTS_SENT))
         f.close()
@@ -215,16 +242,17 @@ class nrIG:
         # DONE_ACCOUNTS = ["bathindiandancesociety","bathindiansoc", "bathtamilsoc"]
 
 
-
-
-        TARGET_ACCOUNTS = ["thesubath"]
+        TARGET_ACCOUNTS = ["bathhindusoc", "bathmalayaleesoc", "thesubath"]
         # TARGET_ACCOUNTS = ["bathindiandancesociety","bathindiansoc", "bathtamilsoc", "bathhindusoc", "bathmalayaleesoc", "thesubath"]
 
 
         for target_account in TARGET_ACCOUNTS:
             print("INITIATING {}".format(target_account))
             try:
-                self.FollowFollowers(target_account)
+                self.UnfollowNonFollowers()
+
+                # self.FollowFollowers(target_account)
+                # self.FollowFollowing(target_account)
             except Exception as e:
                 print(e)
             print("DONE_{}".format(target_account))
@@ -232,7 +260,12 @@ class nrIG:
 
 
     def UnfollowNonFollowers(self):
-        list_of_followers = eval(open("list_of_followers.txt", "r").read())
+
+
+        # list_of_followers = eval(open("list_of_followers.txt", "r").read())
+        list_of_followers = self.__ScrollFollowers(self.owner_account, None)
+        # open("list_of_followers.txt", "w").write(str(list_of_followers))
+        # list_of_followers = eval(open("list_of_followers.txt", "r").read())
         list_of_following = self.__ScrollFollowing(self.owner_account, self.__UnfollowUser, list_of_followers = list_of_followers)
 
 
@@ -247,22 +280,52 @@ class nrIG:
 
 
 
+# owner_account = "jasbindra00"
+
+owner_account = "bathsikhsoc"
+IGBot = nrIG(owner_account)
+
+def succeeded(target_account):
+
+    try:
+        print("TARGETING ACCOUNT {}".format(target_account))
+        IGBot.FollowFollowers(target_account)
+        IGBot.FollowFollowing(target_account)
+        IGBot.UnfollowNonFollowers()
+        IGBot.SaveChanges()
+        
+    except Exception as e:
+        print("ERROR OCCURED ON TARGET ACCOUNT {}".format(target_account))
+        error_array = eval(open("errors.txt", "r").read())
+        error_array.append(target_account)
+        open("errors.txt", "w").write(str(error_array))
+        return False
+    print("TARGET ACCOUNT: {}  - DONE".format(target_account))
+    return True
+
 
 
 
 def main():
-   
-    try:
-        owner_account = "bathsikhsoc"
-        IGBot = nrIG(owner_account)
-        IGBot.UnfollowNonFollowers()
+    
 
-    except Exception as e:
-        print(e)
-        f = open("requests_sent.txt", "w")
-        f.write(str(IGBot.REQUESTS_SENT))
-        f.close()
+    TARGET_ACCOUNTS = ["bristolsikhsoc", "cusikhsociety", "soassikhsociety", "ukcsikhsoc", "sussexsikhsociety", "oxfordsikhsoc", "ueasikhsociety", "manchestersikhsociety","nishkamswat", 
+    "uonsikhsoc", "warwicksikhsoc", "essexsikhsoc", "uop_sikhsoc","keelesikhsoc","westminstersikhsociety", 
+    "uolsikhsoc", "qmulsikhsoc", "lancaster_sikhsoc", "ulawsikhsociety",
+    "lsesusikhpunjabsociety", "ntusikhsoc", "sgulsikhsoc", "gresikhsoc", "surreysikhsoc",
+    "imperialsikhsoc", "hertssikhsoc", "uclsikhsoc", "sikh_soc", "livsikhsoc", 
+    "uobsikhsociety", "lincolnsikhsociety", "bcusikhsociety", "rhulsikhsoc", 
+    "uor_sikhsociety", "dmusikhsoc", "kingssikhs", "astonsikhs", "cusikhsoc", 
+    "lsusikhsoc", "coventrysikhsociety", "sikhsocsheffield", "uwlsikhsociety", 
+    "roesikhsoc", "nsikhsoc", "coventrysikhsoc", "arusikhsoc", "soassikhsoc",
+    "exetersikhsociety","manchestersikhsociety"]
+    IGBot.UnfollowNonFollowers()
 
+    TARGET_ACCOUNTS.reverse()
+    for target_account in TARGET_ACCOUNTS:
+        while not succeeded(target_account):
+            continue
+ 
 main()
 
 
