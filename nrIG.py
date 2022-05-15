@@ -17,6 +17,7 @@ from docutil import DocUtil
 
 import atexit
 import threading
+import random
 
 class nrIG:
     def __init__(self, owner_account):
@@ -24,7 +25,7 @@ class nrIG:
         self.owner_account = owner_account
         self.RUNNING = True
         self.REQUESTS_SENT = eval(open("requests_sent.txt", "r").read())
-
+        self.TARGETED_ACCOUNTS = []
 
         self.TIMEOUT_DURATION  = 3
         self.IGURL = 'https://www.instagram.com/'
@@ -44,7 +45,7 @@ class nrIG:
 
         self.browser.get(self.IGURL)
 
-        self.IG_REQUEST_BUFFER_DURATION = 60
+        self.IG_REQUEST_BUFFER_DURATION = 120
 
 
         listener_thread = threading.Thread(target=self.ListenForCommands)
@@ -104,36 +105,34 @@ class nrIG:
 
 
     def __FollowUser(self, found_ig_account, **kwargs):
+        account_text = found_ig_account.text.upper().split("\n")
+        user_name = account_text[0]
+        
+        following_status = account_text[-1]
+        print("FOUND USER {} : {}".format(user_name, following_status))
+        
+        if following_status != "FOLLOW": return
+        if user_name in self.REQUESTS_SENT:
+            print("SENT FOLLOW REQUEST TO {} ALREADY!".format(user_name))
+            return
         try:
-            account_text = found_ig_account.text.upper().split("\n")
-            user_name = account_text[0]
-            
-            following_status = account_text[-1]
-            print("FOUND USER {} : {}".format(user_name, following_status))
-            
-            if following_status != "FOLLOW": return
-            if user_name in self.REQUESTS_SENT:
-                print("SENT FOLLOW REQUEST TO {} ALREADY!".format(user_name))
-                return
-            try:
-                follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="div.{}".format("Pkbci button"))
-            except Exception as e:
-                follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="button.{}".format("sqdOP.L3NKy._8A5w5"))
-                                                                                     
-            follow_button.click()
-            sleep(2)
-            if follow_button.text.upper() == "FOLLOW":
-                print("FOLLOW LIMIT REACHED ON {}".format(user_name))
-                return
-            print("FOLLOWED USER {}".format(user_name))
-            self.REQUESTS_SENT.append(user_name)
-            self.SaveChanges()
-
-            for i in range(self.IG_REQUEST_BUFFER_DURATION):
-                print("SLEEPING {}TH SECOND".format(i))
-                sleep(1)
+            follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="div.{}".format("Pkbci button"))
         except Exception as e:
-            print(e)
+            follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="button.{}".format("sqdOP.L3NKy._8A5w5"))
+                                                                                    
+        follow_button.click()
+        sleep(2)
+        if follow_button.text.upper() == "FOLLOW":
+            print("FOLLOW LIMIT REACHED ON {}".format(user_name))
+            return
+        print("FOLLOWED USER {}".format(user_name))
+        self.REQUESTS_SENT.append(user_name)
+        self.SaveChanges()
+
+        for i in range(self.IG_REQUEST_BUFFER_DURATION):
+            print("SLEEPING {}TH SECOND".format(i))
+            sleep(1)
+
 
     def __AccrueUser(self, found_ig_account, **kwargs):
         list_of_followers = kwargs.get("list_of_followers")
@@ -147,45 +146,42 @@ class nrIG:
             
 
     def __UnfollowUser(self,found_ig_account, **kwargs):
+        list_of_followers = kwargs.get("list_of_followers")
+        pop_up_box = kwargs.get("pop_up_box")
+
+        account_text = found_ig_account.text.upper().split("\n")
+        user_name = account_text[0]
+        user_link = 'https://www.instagram.com/{}/'.format(user_name.lower())
+        
+        following_status = account_text[-1]
+        print("FOUND USER {} : {}".format(user_name, following_status))
         try:
-            list_of_followers = kwargs.get("list_of_followers")
-            pop_up_box = kwargs.get("pop_up_box")
-
-            account_text = found_ig_account.text.upper().split("\n")
-            user_name = account_text[0]
-            user_link = 'https://www.instagram.com/{}/'.format(user_name.lower())
-            
-            following_status = account_text[-1]
-            print("FOUND USER {} : {}".format(user_name, following_status))
-            try:
-                follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="div.{}".format("Pkbci button"))
-            except Exception as e:
-                follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="button.{}".format("sqdOP.L3NKy._8A5w5"))
-                      
-            if user_link not in list_of_followers and following_status == "FOLLOWING":
-                follow_button.click()
-                try:
-                    unfollow_button = [button for button in self.browser.find_elements(by=By.TAG_NAME, value='button') if button.text.lower() == "unfollow"][0]
-                    unfollow_button.click()
-                except Exception as e:
-                    return
-                sleep(2)
-
-                if follow_button.text.upper() == "FOLLOW":
-                    print("UNFOLLOWED USER {}".format(user_link))
-                    self.REQUESTS_SENT.append(user_name)
-                    self.SaveChanges()
-                    ActionChains(self.browser).move_to_element(pop_up_box).click().perform()
-                    for i in range(60):
-                        print("SLEEPING {}TH SECOND".format(i))
-                        sleep(1)
-                    return
-                
-                print("LIMIT REACHED")
-
+            follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="div.{}".format("Pkbci button"))
         except Exception as e:
-            print(e)
+            follow_button = found_ig_account.find_element(by=By.CSS_SELECTOR, value="button.{}".format("sqdOP.L3NKy._8A5w5"))
+                    
+        if user_link not in list_of_followers and following_status == "FOLLOWING":
+            follow_button.click()
+            try:
+                unfollow_button = [button for button in self.browser.find_elements(by=By.TAG_NAME, value='button') if button.text.lower() == "unfollow"][0]
+                unfollow_button.click()
+            except Exception as e:
+                return
+            sleep(2)
+
+            if follow_button.text.upper() == "FOLLOW":
+                print("UNFOLLOWED USER {}".format(user_link))
+                self.REQUESTS_SENT.append(user_name)
+                self.SaveChanges()
+                ActionChains(self.browser).move_to_element(pop_up_box).click().perform()
+                for i in range(self.IG_REQUEST_BUFFER_DURATION):
+                    print("SLEEPING {}TH SECOND".format(i))
+                    sleep(1)
+                return
             
+            print("LIMIT REACHED")
+
+ 
 
     
     
@@ -238,26 +234,7 @@ class nrIG:
 
 
 
-    def Farm(self):
-        # DONE_ACCOUNTS = ["bathindiandancesociety","bathindiansoc", "bathtamilsoc"]
-
-
-        TARGET_ACCOUNTS = ["bathhindusoc", "bathmalayaleesoc", "thesubath"]
-        # TARGET_ACCOUNTS = ["bathindiandancesociety","bathindiansoc", "bathtamilsoc", "bathhindusoc", "bathmalayaleesoc", "thesubath"]
-
-
-        for target_account in TARGET_ACCOUNTS:
-            print("INITIATING {}".format(target_account))
-            try:
-                self.UnfollowNonFollowers()
-
-                # self.FollowFollowers(target_account)
-                # self.FollowFollowing(target_account)
-            except Exception as e:
-                print(e)
-            print("DONE_{}".format(target_account))
-
-
+ 
 
     def UnfollowNonFollowers(self):
 
@@ -268,10 +245,6 @@ class nrIG:
         # list_of_followers = eval(open("list_of_followers.txt", "r").read())
         list_of_following = self.__ScrollFollowing(self.owner_account, self.__UnfollowUser, list_of_followers = list_of_followers)
 
-
-
-
-        
 
 
 
@@ -309,23 +282,27 @@ def succeeded(target_account):
 def main():
     
 
-    TARGET_ACCOUNTS = ["bristolsikhsoc", "cusikhsociety", "soassikhsociety", "ukcsikhsoc", "sussexsikhsociety", "oxfordsikhsoc", "ueasikhsociety", "manchestersikhsociety","nishkamswat", 
-    "uonsikhsoc", "warwicksikhsoc", "essexsikhsoc", "uop_sikhsoc","keelesikhsoc","westminstersikhsociety", 
-    "uolsikhsoc", "qmulsikhsoc", "lancaster_sikhsoc", "ulawsikhsociety",
-    "lsesusikhpunjabsociety", "ntusikhsoc", "sgulsikhsoc", "gresikhsoc", "surreysikhsoc",
-    "imperialsikhsoc", "hertssikhsoc", "uclsikhsoc", "sikh_soc", "livsikhsoc", 
-    "uobsikhsociety", "lincolnsikhsociety", "bcusikhsociety", "rhulsikhsoc", 
-    "uor_sikhsociety", "dmusikhsoc", "kingssikhs", "astonsikhs", "cusikhsoc", 
-    "lsusikhsoc", "coventrysikhsociety", "sikhsocsheffield", "uwlsikhsociety", 
-    "roesikhsoc", "nsikhsoc", "coventrysikhsoc", "arusikhsoc", "soassikhsoc",
-    "exetersikhsociety","manchestersikhsociety"]
-    IGBot.UnfollowNonFollowers()
 
-    TARGET_ACCOUNTS.reverse()
-    for target_account in TARGET_ACCOUNTS:
-        while not succeeded(target_account):
-            continue
- 
+
+    TARGET_ACCOUNT = "uclsikhsoc"
+    # TARGET_ACCOUNTS = ["bristolsikhsoc", "cusikhsociety", "soassikhsociety", "ukcsikhsoc", "sussexsikhsociety", "oxfordsikhsoc", "ueasikhsociety", "manchestersikhsociety","nishkamswat", 
+    # "uonsikhsoc", "warwicksikhsoc", "essexsikhsoc", "uop_sikhsoc","keelesikhsoc","westminstersikhsociety", 
+    # "uolsikhsoc", "qmulsikhsoc", "lancaster_sikhsoc", "ulawsikhsociety",
+    # "lsesusikhpunjabsociety", "ntusikhsoc", "sgulsikhsoc", "gresikhsoc", "surreysikhsoc",
+    # "imperialsikhsoc", "hertssikhsoc", "uclsikhsoc", "sikh_soc", "livsikhsoc", 
+    # "uobsikhsociety", "lincolnsikhsociety", "bcusikhsociety", "rhulsikhsoc", 
+    # "uor_sikhsociety", "dmusikhsoc", "kingssikhs", "astonsikhs", "cusikhsoc", 
+    # "lsusikhsoc", "coventrysikhsociety", "sikhsocsheffield", "uwlsikhsociety", 
+    # "roesikhsoc", "nsikhsoc", "coventrysikhsoc", "arusikhsoc", "soassikhsoc",
+    # "exetersikhsociety","manchestersikhsociety"]
+    # IGBot.UnfollowNonFollowers()
+
+    # for target_account in TARGET_ACCOUNTS:
+    i = 0
+    while True:
+        print("ROUND {}".format(str(i)))
+        while not succeeded(TARGET_ACCOUNT):
+            i += 1
 main()
 
 
