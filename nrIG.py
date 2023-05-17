@@ -1,24 +1,17 @@
 from multiprocessing.pool import RUN
-import profile
-from pydoc import Doc
 from time import sleep
-import re
-from cv2 import accumulate
 
 from selenium import webdriver
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
-from msedge.selenium_tools import Edge, EdgeOptions
 from selenium.webdriver.support.ui import WebDriverWait
-from datetime import datetime
-from docutil import DocUtil
-
-import atexit
 import threading
-import random
+import time
 
+
+from selenium.webdriver.chrome.options import Options
 class nrIG:
     def __init__(self, owner_account):
         self.SAVE_MODE = True
@@ -26,31 +19,31 @@ class nrIG:
         self.RUNNING = True
         self.REQUESTS_SENT = eval(open("requests_sent.txt", "r").read())
         self.TARGETED_ACCOUNTS = []
+        options = Options()
+        options.add_argument("--user-data-dir=/Users/jasbindra/Library/Application Support/Google/Chrome/Default")
+        self.browser = webdriver.Chrome(options=options)
+
 
         self.TIMEOUT_DURATION  = 3
         self.IGURL = 'https://www.instagram.com/'
 
 
-        edge_options = EdgeOptions()
-        edge_options.use_chromium = True
 
-        user_data_dir = r"C:\Users\jasbi\AppData\Local\Microsoft\Edge\User Data\Selenium Dev"
-        edge_options.add_argument("user-data-dir={}".format(user_data_dir)); 
-
-        edge_options.binary_location = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-        driver_location = r"D:\FILES\Desktop\other\IGTools\msedgedriver.exe"
 
  
-        self.browser = Edge(executable_path=driver_location, options=edge_options)
-
         self.browser.get(self.IGURL)
 
         self.IG_REQUEST_BUFFER_DURATION = 120
 
-
         listener_thread = threading.Thread(target=self.ListenForCommands)
         listener_thread.setDaemon(True)
         listener_thread.start()
+
+
+    def wait_for_page_load(self, timeout=10):
+        WebDriverWait(self.browser, timeout).until(
+            lambda browser: browser.execute_script("return document.readyState") == "complete"
+        )
 
 
     def ScrollOnElement(self, element, element_css_selector, sleep_duration = 0):
@@ -66,30 +59,28 @@ class nrIG:
 
     def ScrollPopupBox(self,host_page,popup_box_link_xpath,popup_box_xpath,pop_up_box_element_selector, element_handler, additional_arguments):
         # navigate to the host page.
-        self.browser.get(host_page)
+        self.browser.get("https://www.instagram.com/jasbindra00/following/")
 
-        # click the link which activates the popup box
-        if popup_box_link_xpath:
-            WebDriverWait(self.browser, self.TIMEOUT_DURATION).until(EC.element_to_be_clickable((By.XPATH,popup_box_link_xpath))).click()
+       
 
         # obtain the pop_up_box
-        pop_up_box =  WebDriverWait(self.browser, self.TIMEOUT_DURATION).until(EC.presence_of_element_located((By.CSS_SELECTOR,popup_box_xpath)))
+        pop_up_box =  WebDriverWait(self.browser, self.TIMEOUT_DURATION).until(EC.presence_of_element_located((By.CSS_SELECTOR,"div._aano")))
 
         num_elements_found_old = -1
         num_elements_found = 0
 
         ActionChains(self.browser).move_to_element(pop_up_box).click().send_keys(Keys.PAGE_DOWN).perform()
-        self.ScrollOnElement(pop_up_box, popup_box_xpath,3)
+        self.ScrollOnElement(pop_up_box, "div._aano",3)
 
         found_ig_accounts = []
 
         while num_elements_found_old != num_elements_found and self.RUNNING:
             if not self.RUNNING: break
    
-            for i in range(0,5): self.ScrollOnElement(pop_up_box,popup_box_xpath, 1)
+            for i in range(0,5): self.ScrollOnElement(pop_up_box,"div._aano", 1)
             tmp = num_elements_found
 
-            users_found = self.browser.find_elements(by=By.CSS_SELECTOR, value=pop_up_box_element_selector)
+            users_found = self.browser.find_elements(by=By.CSS_SELECTOR, value="div.x1i10hfl")
             num_elements_found = len(users_found)
             num_elements_found_old = tmp
 
@@ -99,9 +90,21 @@ class nrIG:
             end_index = num_elements_found - 1
             
             found_ig_accounts_tmp = users_found[start_index: end_index]
-            if element_handler is not None:
-                for found_ig_account in found_ig_accounts_tmp:
-                    element_handler(found_ig_account, **additional_arguments, pop_up_box=pop_up_box)
+            for found_account in found_ig_accounts_tmp:
+                try:
+                    button_element = found_account.find_element(By.TAG_NAME, "button")
+                    divs = button_element.find_elements(By.XPATH, './/div')
+                    for div in divs:
+                        if div.text.strip() == 'Follow':
+                            button_element.click()
+                            for i in range(self.IG_REQUEST_BUFFER_DURATION):
+                                print("SLEEPING {}TH SECOND".format(i))
+                                sleep(1)
+                            break
+
+                except:
+                    continue
+
 
 
     def __FollowUser(self, found_ig_account, **kwargs):
@@ -187,8 +190,8 @@ class nrIG:
     
     # MERGE TWO FUNCTIONS INTO ONE (V SIMILAR)
     def __ScrollFollowing(self, instagram_name, user_handler, **kwargs):
-        self.ScrollPopupBox(additional_arguments = kwargs, host_page = self.IGURL + instagram_name, popup_box_link_xpath='//*[@id="react-root"]/section/main/div/header/section/ul/li[3]/a', 
-        popup_box_xpath='div.isgrP', pop_up_box_element_selector='div.isgrP ul li', element_handler=user_handler)
+        self.ScrollPopupBox(additional_arguments = kwargs, host_page = self.IGURL + instagram_name, popup_box_link_xpath='/html/body/div[2]/div/div/div[2]/div/div/div/div[1]/div[1]/div[2]/div[2]/section/main/div/ul/li[3]/a', 
+        popup_box_xpath='"div._aano"', pop_up_box_element_selector='div.isgrP ul li', element_handler=user_handler)
         return self.__GetAllUserLinks()
 
     def __ScrollFollowers(self, instagram_name, user_handler, **kwargs):
@@ -255,23 +258,21 @@ class nrIG:
 
 # owner_account = "jasbindra00"
 
-owner_account = "bathsikhsoc"
+owner_account = "jasbindra00"
 IGBot = nrIG(owner_account)
 
 def succeeded(target_account):
 
     try:
         print("TARGETING ACCOUNT {}".format(target_account))
-        IGBot.FollowFollowers(target_account)
+        # IGBot.FollowFollowers(target_account)
         IGBot.FollowFollowing(target_account)
-        IGBot.UnfollowNonFollowers()
+        # IGBot.UnfollowNonFollowers()
         IGBot.SaveChanges()
         
     except Exception as e:
         print("ERROR OCCURED ON TARGET ACCOUNT {}".format(target_account))
-        error_array = eval(open("errors.txt", "r").read())
-        error_array.append(target_account)
-        open("errors.txt", "w").write(str(error_array))
+        print(e)
         return False
     print("TARGET ACCOUNT: {}  - DONE".format(target_account))
     return True
@@ -284,7 +285,7 @@ def main():
 
 
 
-    TARGET_ACCOUNT = "uclsikhsoc"
+    TARGET_ACCOUNT = "jasbindra00"
     # TARGET_ACCOUNTS = ["bristolsikhsoc", "cusikhsociety", "soassikhsociety", "ukcsikhsoc", "sussexsikhsociety", "oxfordsikhsoc", "ueasikhsociety", "manchestersikhsociety","nishkamswat", 
     # "uonsikhsoc", "warwicksikhsoc", "essexsikhsoc", "uop_sikhsoc","keelesikhsoc","westminstersikhsociety", 
     # "uolsikhsoc", "qmulsikhsoc", "lancaster_sikhsoc", "ulawsikhsociety",
